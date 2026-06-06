@@ -53,8 +53,9 @@ docker-compose down
 ### Frontend Deployment (Vercel)
 1. Push your code to GitHub/GitLab
 2. Import project into Vercel
-3. Add environment variable: `NEXT_PUBLIC_API_URL`
-4. Deploy!
+3. Set the Root Directory to `frontend`
+4. Add environment variable: `NEXT_PUBLIC_API_URL`
+5. Deploy!
 
 ### Backend Deployment (Railway/Render)
 1. Push your code to GitHub/GitLab
@@ -68,9 +69,10 @@ docker-compose down
 4. Deploy!
 
 ### Database Setup
-Run the SQL migration file to set up your database:
+Run the SQL migration files to set up your database:
 ```sql
 -- Run backend/migrations/001_add_email_verification_and_reset.sql
+-- Run backend/migrations/002_migrate_auth_users.sql (if needed)
 ```
 
 ## 🛠️ Environment Variables
