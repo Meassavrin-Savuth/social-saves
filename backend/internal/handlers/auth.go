@@ -13,6 +13,7 @@ import (
 	"socialsave/internal/email"
 	"socialsave/internal/models"
 	"socialsave/internal/utils"
+	"strings"
 	"time"
 
 	"github.com/lib/pq"
@@ -47,6 +48,10 @@ func isValidEmail(emailStr string) bool {
 	return hasDot
 }
 
+func normalizeEmail(email string) string {
+	return strings.ToLower(strings.TrimSpace(email))
+}
+
 type AuthHandler struct {
 	DB *sql.DB
 }
@@ -75,6 +80,9 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "email and password required", http.StatusBadRequest)
 		return
 	}
+
+	user.Email = normalizeEmail(user.Email)
+	user.Password = strings.TrimSpace(user.Password)
 
 	if !isValidEmail(user.Email) {
 		http.Error(w, "invalid email address", http.StatusBadRequest)
@@ -149,6 +157,9 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	input.Email = normalizeEmail(input.Email)
+	input.Password = strings.TrimSpace(input.Password)
+
 	if !isValidEmail(input.Email) {
 		http.Error(w, "invalid email address", http.StatusBadRequest)
 		return
@@ -176,6 +187,11 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	// Check if email is verified
 	if !verifiedAt.Valid {
 		http.Error(w, "email not verified", http.StatusUnauthorized)
+		return
+	}
+
+	if strings.TrimSpace(storedUser.Password) == "" {
+		http.Error(w, "account uses Google login or needs a password reset", http.StatusUnauthorized)
 		return
 	}
 
