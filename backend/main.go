@@ -20,16 +20,19 @@ var db *sql.DB
 
 func main() {
 
-	// load env
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
+	// Load .env file if it exists (for local development only)
+	_ = godotenv.Load()
+
+	// Get port from environment (Render sets this automatically)
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
 	}
 
 	// DB connection
 	connStr := os.Getenv("DB_URL")
 
-	db, err = sql.Open("postgres", connStr)
+	db, err := sql.Open("postgres", connStr)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -49,13 +52,33 @@ func main() {
 	if frontendURL == "" {
 		frontendURL = "http://localhost:3000"
 	}
+
+	// Set up CORS - allow multiple origins (localhost + deployed frontend)
+	allowedOrigins := []string{
+		frontendURL,
+		"http://localhost:3000",
+	}
+
 	if err := r.SetTrustedProxies(nil); err != nil {
 		log.Fatal(err)
 	}
 	r.Use(func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", frontendURL)
-		c.Header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		origin := c.GetHeader("Origin")
+
+		// Check if the origin is allowed
+		allowed := false
+		for _, o := range allowedOrigins {
+			if origin == o {
+				allowed = true
+				break
+			}
+		}
+
+		if allowed {
+			c.Header("Access-Control-Allow-Origin", origin)
+			c.Header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS")
+			c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		}
 
 		if c.Request.Method == http.MethodOptions {
 			c.AbortWithStatus(204)
@@ -129,9 +152,9 @@ func main() {
 	r.GET("/auth/google/login", handlers.GoogleLoginHandler)
 	r.GET("/auth/google/callback", handlers.GoogleCallback)
 
-	fmt.Println("Server running on http://localhost:8080")
+	fmt.Printf("Server running on http://localhost:%s\n", port)
 
-	if err := r.Run(":8080"); err != nil {
+	if err := r.Run(":" + port); err != nil {
 		log.Fatal(err)
 	}
 }
