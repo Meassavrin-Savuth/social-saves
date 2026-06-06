@@ -4,17 +4,11 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"socialsave/config"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 )
-
-type Claims struct {
-	UserID int    `json:"user_id"`
-	Email  string `json:"email"`
-	Name   string `json:"name"`
-	jwt.RegisteredClaims
-}
 
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -32,7 +26,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		tokenString := strings.Replace(authHeader, "Bearer ", "", 1)
 
 		// 3. Parse token
-		token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
+		token, err := jwt.ParseWithClaims(tokenString, &config.Claims{}, func(token *jwt.Token) (interface{}, error) {
 			return []byte(os.Getenv("JWT_SECRET")), nil
 		})
 
@@ -43,7 +37,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		}
 
 		// 4. Extract claims
-		claims := token.Claims.(*Claims)
+		claims := token.Claims.(*config.Claims)
 
 		// 5. Store user in context
 		c.Set("user_id", claims.UserID)

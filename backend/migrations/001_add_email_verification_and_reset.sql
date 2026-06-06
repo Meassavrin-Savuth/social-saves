@@ -1,0 +1,25 @@
+-- Core schema for SocialSave.
+CREATE TABLE IF NOT EXISTS users (
+    id SERIAL PRIMARY KEY,
+    email TEXT NOT NULL UNIQUE,
+    password TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS bookmarks (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    url TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    category TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS name TEXT,
+ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ,
+ADD COLUMN IF NOT EXISTS verification_token TEXT,
+ADD COLUMN IF NOT EXISTS verification_token_expires TIMESTAMPTZ,
+ADD COLUMN IF NOT EXISTS reset_password_token TEXT,
+ADD COLUMN IF NOT EXISTS reset_password_expires TIMESTAMPTZ;

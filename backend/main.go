@@ -4,8 +4,11 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"socialsave/handlers"
+	internalHandlers "socialsave/internal/handlers"
+	internalMiddleware "socialsave/internal/middleware"
 	middleware "socialsave/middle"
 
 	"github.com/gin-gonic/gin"
@@ -42,6 +45,25 @@ func main() {
 
 	// Gin setup
 	r := gin.Default()
+	frontendURL := os.Getenv("FRONTEND_URL")
+	if frontendURL == "" {
+		frontendURL = "http://localhost:3000"
+	}
+	if err := r.SetTrustedProxies(nil); err != nil {
+		log.Fatal(err)
+	}
+	r.Use(func(c *gin.Context) {
+		c.Header("Access-Control-Allow-Origin", frontendURL)
+		c.Header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS")
+		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+		if c.Request.Method == http.MethodOptions {
+			c.AbortWithStatus(204)
+			return
+		}
+
+		c.Next()
+	})
 
 	// test route (DB)
 	r.GET("/", func(c *gin.Context) {
@@ -58,22 +80,58 @@ func main() {
 		})
 	})
 
-		r.GET("/profile", middleware.AuthMiddleware(), func(c *gin.Context) {
-			userID := c.GetInt("user_id")
-			email := c.GetString("email")
-			name := c.GetString("name")
+	// bookmarks route (uses internal net/http-style handler)
+	bookmarkHandler := &internalHandlers.BookmarkHandler{DB: db}
+	authHandler := &internalHandlers.AuthHandler{DB: db}
+	r.POST("/bookmarks", func(c *gin.Context) {
+		internalMiddleware.AuthMiddleware(bookmarkHandler.CreateBookmark).ServeHTTP(c.Writer, c.Request)
+	})
+	r.GET("/bookmarks", func(c *gin.Context) {
+		internalMiddleware.AuthMiddleware(bookmarkHandler.GetBookmarks).ServeHTTP(c.Writer, c.Request)
+	})
+	r.DELETE("/bookmarks", func(c *gin.Context) {
+		internalMiddleware.AuthMiddleware(bookmarkHandler.DeleteBookmark).ServeHTTP(c.Writer, c.Request)
+	})
+	r.PUT("/bookmarks", func(c *gin.Context) {
+		internalMiddleware.AuthMiddleware(bookmarkHandler.UpdateBookmark).ServeHTTP(c.Writer, c.Request)
+	})
 
-			c.JSON(200, gin.H{
-				"user_id": userID,
-				"email":   email,
-				"name":    name,
-			})
+	r.GET("/profile", middleware.AuthMiddleware(), func(c *gin.Context) {
+		userID := c.GetInt("user_id")
+		email := c.GetString("email")
+		name := c.GetString("name")
+
+		c.JSON(200, gin.H{
+			"user_id": userID,
+			"email":   email,
+			"name":    name,
 		})
+	})
 	// auth routes
+	r.POST("/register", func(c *gin.Context) {
+		authHandler.Register(c.Writer, c.Request)
+	})
+	r.POST("/login", func(c *gin.Context) {
+		authHandler.Login(c.Writer, c.Request)
+	})
+	r.GET("/verify-email", func(c *gin.Context) {
+		authHandler.VerifyEmail(c.Writer, c.Request)
+	})
+	r.POST("/resend-verification", func(c *gin.Context) {
+		authHandler.ResendVerification(c.Writer, c.Request)
+	})
+	r.POST("/forgot-password", func(c *gin.Context) {
+		authHandler.ForgotPassword(c.Writer, c.Request)
+	})
+	r.POST("/reset-password", func(c *gin.Context) {
+		authHandler.ResetPassword(c.Writer, c.Request)
+	})
 	r.GET("/auth/google/login", handlers.GoogleLoginHandler)
 	r.GET("/auth/google/callback", handlers.GoogleCallback)
 
 	fmt.Println("Server running on http://localhost:8080")
 
-	r.Run(":8080")
+	if err := r.Run(":8080"); err != nil {
+		log.Fatal(err)
+	}
 }

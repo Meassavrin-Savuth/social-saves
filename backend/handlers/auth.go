@@ -4,8 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"os"
 
 	"socialsave/config"
 
@@ -62,8 +65,21 @@ func GoogleCallback(c *gin.Context) {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to fetch user info"})
+		return
+	}
+
 	var gUser GoogleUser
-	json.NewDecoder(resp.Body).Decode(&gUser)
+	if err := json.NewDecoder(resp.Body).Decode(&gUser); err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": "invalid user info response"})
+		return
+	}
+
+	if gUser.Email == "" {
+		c.JSON(http.StatusBadGateway, gin.H{"error": "missing google email"})
+		return
+	}
 
 	// 3. check if user exists
 	var userID int
@@ -74,14 +90,12 @@ func GoogleCallback(c *gin.Context) {
 	).Scan(&userID)
 
 	// 4. if not exist → insert
-	if err != nil {
+	if errors.Is(err, sql.ErrNoRows) {
 
 		err = db.QueryRow(
-			"INSERT INTO users (name, email, avatar, provider) VALUES ($1, $2, $3, $4) RETURNING id",
-			gUser.Name,
+			"INSERT INTO users (email, password, created_at, verified_at) VALUES ($1, $2, NOW(), NOW()) RETURNING id",
 			gUser.Email,
-			gUser.Picture,
-			"google",
+			"",
 		).Scan(&userID)
 
 		if err != nil {
@@ -89,6 +103,16 @@ func GoogleCallback(c *gin.Context) {
 			c.JSON(500, gin.H{"error": "failed to create user"})
 			return
 		}
+	} else if err == nil {
+		// If user exists but not verified, mark as verified
+		_, err = db.Exec("UPDATE users SET verified_at = NOW() WHERE id = $1 AND verified_at IS NULL", userID)
+		if err != nil {
+			fmt.Println("DB ERROR:", err)
+		}
+	} else {
+		fmt.Println("DB ERROR:", err)
+		c.JSON(500, gin.H{"error": "failed to load user"})
+		return
 	}
 
 	// 5. generate JWT
@@ -98,14 +122,25 @@ func GoogleCallback(c *gin.Context) {
 		return
 	}
 
-	// 6. return response
-	c.JSON(200, gin.H{
-		"message": "login success",
-		"token":   tokenString,
-		"user": gin.H{
-			"id":    userID,
-			"name":  gUser.Name,
-			"email": gUser.Email,
-		},
-	})
+	// 6. redirect back to frontend with token
+	baseFrontendURL := os.Getenv("FRONTEND_URL")
+	if baseFrontendURL == "" {
+		baseFrontendURL = "http://localhost:3000"
+	}
+	frontendURL := baseFrontendURL + "/login?token=" + url.QueryEscape(tokenString)
+	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(fmt.Sprintf(`
+<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8" />
+		<meta http-equiv="refresh" content="0;url=%[1]s" />
+		<script>
+			window.location.replace(%[2]q);
+		</script>
+	</head>
+	<body>
+		Redirecting...
+	</body>
+</html>
+`, frontendURL, frontendURL)))
 }
