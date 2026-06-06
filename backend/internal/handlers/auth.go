@@ -52,12 +52,7 @@ type AuthHandler struct {
 }
 
 func getFrontendURL() string {
-	frontendURL := os.Getenv("FRONTEND_URL")
-	if frontendURL == "" {
-		return "http://localhost:3000"
-	}
-
-	return frontendURL
+	return config.GetFrontendURL()
 }
 
 func isUniqueViolation(err error) bool {

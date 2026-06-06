@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"socialsave/config"
 	"socialsave/handlers"
 	internalHandlers "socialsave/internal/handlers"
 	internalMiddleware "socialsave/internal/middleware"
@@ -48,15 +49,9 @@ func main() {
 
 	// Gin setup
 	r := gin.Default()
-	frontendURL := os.Getenv("FRONTEND_URL")
-	if frontendURL == "" {
-		frontendURL = "http://localhost:3000"
-	}
-
-	// Set up CORS - allow multiple origins (localhost + deployed frontend)
-	allowedOrigins := []string{
-		frontendURL,
-		"http://localhost:3000",
+	frontendURL := config.GetFrontendURL()
+	allowedOrigins := map[string]struct{}{
+		frontendURL: {},
 	}
 
 	if err := r.SetTrustedProxies(nil); err != nil {
@@ -66,13 +61,7 @@ func main() {
 		origin := c.GetHeader("Origin")
 
 		// Check if the origin is allowed
-		allowed := false
-		for _, o := range allowedOrigins {
-			if origin == o {
-				allowed = true
-				break
-			}
-		}
+		_, allowed := allowedOrigins[origin]
 
 		if allowed {
 			c.Header("Access-Control-Allow-Origin", origin)
@@ -152,7 +141,7 @@ func main() {
 	r.GET("/auth/google/login", handlers.GoogleLoginHandler)
 	r.GET("/auth/google/callback", handlers.GoogleCallback)
 
-	fmt.Printf("Server running on http://localhost:%s\n", port)
+	fmt.Printf("Server running on port %s\n", port)
 
 	if err := r.Run(":" + port); err != nil {
 		log.Fatal(err)

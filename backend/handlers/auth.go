@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 
 	"socialsave/config"
 
@@ -123,11 +122,7 @@ func GoogleCallback(c *gin.Context) {
 	}
 
 	// 6. redirect back to frontend with token
-	baseFrontendURL := os.Getenv("FRONTEND_URL")
-	if baseFrontendURL == "" {
-		baseFrontendURL = "http://localhost:3000"
-	}
-	frontendURL := baseFrontendURL + "/login?token=" + url.QueryEscape(tokenString)
+	frontendURL := config.GetFrontendURL() + "/login?token=" + url.QueryEscape(tokenString)
 	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(fmt.Sprintf(`
 <!doctype html>
 <html>
